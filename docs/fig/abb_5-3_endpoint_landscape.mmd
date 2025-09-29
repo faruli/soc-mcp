@@ -1,0 +1,49 @@
+flowchart TB
+  subgraph Clients
+    A["Analyst (Browser)"]
+    C["Claude Desktop (MCP)"]
+  end
+
+  subgraph Proxy["Security Proxy + Dashboard"]
+    P1["GET /_audit.json"]
+    P2["GET /_alerts.json"]
+    P3["GET /_enrich.json"]
+    P4["/dashboard/"]
+  end
+
+  subgraph SOC["SOC-MCP Server (FastAPI)"]
+    I["POST /alerts/ingest → BackgroundTasks"]
+    E1["GET /cve/live/{cveId}"]
+    E2["GET /attack/live/{techId}"]
+    E3["GET /malware/{hash}"]
+    S1["POST /splunk/export"]
+    S2["POST /sentinel/query"]
+    M["/mcp (FastApiMCP)"]
+  end
+
+  subgraph Files["Logs (JSONL)"]
+    L1["audit.jsonl"]
+    L2["_alerts.json"]
+    L3["_enrich.json"]
+  end
+
+  subgraph Sources["Externe Datenquellen"]
+    NVD["NVD API v2"]
+    ATT["MITRE ATT&CK TAXII 2.1"]
+    VT["VirusTotal v3"]
+    SPL["Splunk Export v2"]
+    AZ["Azure Log Analytics"]
+  end
+
+  A --> P4
+  A --> P1 --> L1
+  A --> P2 --> L2
+  A --> P3 --> L3
+  C --> M
+  I --> L2
+  I --> L3
+  E1 --> NVD
+  E2 --> ATT
+  E3 --> VT
+  S1 --> SPL
+  S2 --> AZ

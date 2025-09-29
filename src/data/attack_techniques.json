@@ -1,0 +1,158 @@
+[
+  {
+    "technique_id": "T1059",
+    "name": "Command and Scripting Interpreter",
+    "tactics": ["Execution"],
+    "kill_chain_phases": ["execution"],
+    "platforms": ["Windows", "Linux", "macOS"],
+    "description": "Gegner führen Befehle über Kommandozeilen oder Skript-Interpreter aus (z. B. cmd.exe, PowerShell, Bash, Python). Dies ermöglicht flexible Ausführung von Payloads und Automatisierung.",
+    "detection": [
+      "Prozess-Erstellung (z. B. cmd.exe, powershell.exe, bash, python)",
+      "Kommandozeilen-Argumente (Base64-Kodierung, Download/Exec)",
+      "Skriptfile-Erstellung in temporären Verzeichnissen"
+    ],
+    "mitigations": [
+      "Application Control (z. B. WDAC/AppLocker)",
+      "Script-Block-Logging aktivieren",
+      "Least-Privilege und JEA für PowerShell"
+    ],
+    "data_sources": ["Process Creation", "Command-Line", "Script Execution", "File Creation"],
+    "references": [
+      "https://attack.mitre.org/techniques/T1059/",
+      "https://learn.microsoft.com/powershell/module/microsoft.powershell.core"
+    ]
+  },
+  {
+    "technique_id": "T1047",
+    "name": "Windows Management Instrumentation",
+    "tactics": ["Execution", "Lateral Movement", "Discovery"],
+    "kill_chain_phases": ["execution", "lateral-movement", "discovery"],
+    "description": "WMI ermöglicht die remote/ lokale Ausführung von Befehlen und das Abfragen von Systeminformationen. Angreifer nutzen wmic.exe oder WMI-Provider für persistente Ausführung und Recon.",
+    "detection": [
+      "Prozess-Events: wmic.exe, powershell.exe mit WMI-Namespaces",
+      "WMI-Ereignisabonnements (Persistenz) überwachen",
+      "Remote WMI-Verbindungen und ungewöhnliche Clients"
+    ],
+    "mitigations": [
+      "WMI-Remoting einschränken",
+      "Logging für WMI-Events aktivieren",
+      "Least-Privilege für Admin-Freigaben"
+    ],
+    "data_sources": ["Process Creation", "Windows Event Logs", "WMI Events", "Network Connections"],
+    "references": ["https://attack.mitre.org/techniques/T1047/"]
+  },
+  {
+    "technique_id": "T1021.001",
+    "name": "Remote Services: Remote Desktop Protocol",
+    "tactics": ["Lateral Movement"],
+    "kill_chain_phases": ["lateral-movement"],
+    "description": "RDP wird zur lateralen Bewegung verwendet. Häufig in Kombination mit Brute-Force oder gestohlenen Anmeldedaten.",
+    "detection": [
+      "Mehrfache fehlgeschlagene RDP-Anmeldungen",
+      "Neue RDP-Verbindungen von ungewöhnlichen Quell-IP-Adressen",
+      "Logon-Typen und Ereignis-IDs (Windows 4624/4625)"
+    ],
+    "mitigations": [
+      "MFA für RDP erzwingen",
+      "RDP nur über VPN/Gateway",
+      "Account Lockout Policies"
+    ],
+    "data_sources": ["Authentication Logs", "Windows Security Logs", "Network Flow"],
+    "references": ["https://attack.mitre.org/techniques/T1021/001/"]
+  },
+  {
+    "technique_id": "T1566.001",
+    "name": "Phishing: Spearphishing Attachment",
+    "tactics": ["Initial Access"],
+    "kill_chain_phases": ["initial-access"],
+    "description": "Gezielte E-Mails mit bösartigen Anhängen (Office, PDF, Archiv) zur Erstinfektion.",
+    "detection": [
+      "E-Mail-Gateway: Signaturen, Sandboxing",
+      "Office-Makro-Ausführungen und AMSI-Logs",
+      "Neue Prozesse durch Office-Anwendungen"
+    ],
+    "mitigations": [
+      "Makros signieren/ blockieren",
+      "Attachment-Sandboxing",
+      "Security-Awareness-Schulungen"
+    ],
+    "data_sources": ["Email Gateway", "Process Creation", "AMSI", "File Creation"],
+    "references": ["https://attack.mitre.org/techniques/T1566/001/"]
+  },
+  {
+    "technique_id": "T1055",
+    "name": "Process Injection",
+    "tactics": ["Defense Evasion", "Privilege Escalation"],
+    "kill_chain_phases": ["defense-evasion", "privilege-escalation"],
+    "description": "Code-Injektion in andere Prozesse (CreateRemoteThread, APC Injection, Reflective DLL).",
+    "detection": [
+      "Verdächtige API-Aufrufe (CreateRemoteThread, VirtualAllocEx, WriteProcessMemory)",
+      "Unsignierte DLLs in Systemprozessen",
+      "EDR-Telemetrie zu Speicher-Manipulation"
+    ],
+    "mitigations": [
+      "EDR mit Memory-Scanning",
+      "Code Integrity (WDAC)",
+      "Härtung kritischer Dienste"
+    ],
+    "data_sources": ["EDR Telemetry", "Process API Monitoring", "DLL Load Events"],
+    "references": ["https://attack.mitre.org/techniques/T1055/"]
+  },
+  {
+    "technique_id": "T1078",
+    "name": "Valid Accounts",
+    "tactics": ["Defense Evasion", "Persistence", "Privilege Escalation", "Initial Access"],
+    "kill_chain_phases": ["defense-evasion", "persistence", "privilege-escalation", "initial-access"],
+    "description": "Nutzung legitimer, kompromittierter Konten, um Sicherheitssysteme zu umgehen.",
+    "detection": [
+      "Anmeldungen zu unüblichen Zeiten und Standorten",
+      "MFA-Benachrichtigungen & Push-Fatigue",
+      "Plötzliche Rollen-/Gruppenänderungen"
+    ],
+    "mitigations": [
+      "MFA erzwingen",
+      "Passwortrotation/SSPR",
+      "Monitoring von Admin-Gruppen"
+    ],
+    "data_sources": ["Authentication Logs", "IAM Events", "Cloud Audit Logs"],
+    "references": ["https://attack.mitre.org/techniques/T1078/"]
+  },
+  {
+    "technique_id": "T1218",
+    "name": "Signed Binary Proxy Execution",
+    "tactics": ["Defense Evasion"],
+    "kill_chain_phases": ["defense-evasion"],
+    "description": "Missbrauch signierter System-Binaries (rundll32, regsvr32, mshta, installutil), um Sicherheit zu umgehen.",
+    "detection": [
+      "Aufruf von LOLBINs mit ungewohnten Parametern",
+      "Netzwerkverbindungen aus System-Binaries",
+      "AMSI/EDR-Events bei Skript-/DLL-Loads"
+    ],
+    "mitigations": [
+      "Application Control für LOLBINs",
+      "Command-Line Auditing",
+      "Blockieren bekannter Missbrauchsmuster"
+    ],
+    "data_sources": ["Process Creation", "Command-Line", "Network Connections"],
+    "references": ["https://attack.mitre.org/techniques/T1218/"]
+  },
+  {
+    "technique_id": "T1053",
+    "name": "Scheduled Task/Job",
+    "tactics": ["Execution", "Persistence", "Privilege Escalation"],
+    "kill_chain_phases": ["execution", "persistence", "privilege-escalation"],
+    "description": "Zeitgesteuerte Ausführung (Windows Task Scheduler, cron, launchd) für Persistenz oder wiederkehrende Aktionen.",
+    "detection": [
+      "Neue/Geänderte geplante Tasks",
+      "Ungewöhnliche Benutzerkontexte",
+      "Skripte/Executable in temporären Pfaden"
+    ],
+    "mitigations": [
+      "Änderungen an Scheduler nur für Admins",
+      "Überwachung auf neue Aufgaben",
+      "Signierte Skripte/Programme erzwingen"
+    ],
+    "data_sources": ["Scheduler Logs", "Process Creation", "File Changes"],
+    "references": ["https://attack.mitre.org/techniques/T1053/"]
+  }
+]

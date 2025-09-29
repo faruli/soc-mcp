@@ -1,0 +1,23 @@
+# Lokale Beispiel-/Mockdaten (nicht ins Repo)
+data/samples/firewall/*.csv
+data/samples/firewall/*.parquet
+data/samples/firewall/*.pcap
+
+# Geheimnisse/Umgebungen
+.env
+src/.env
+
+# Virtuelle Umgebung
+.venv/
+src/logs/
+
+# Test-Artefakte (falls VCR/Recording genutzt)
+tests/cassettes/**/*.yaml
+
+# Laufzeit-Logs – Ordner behalten, Dateien ignorieren
+src/logs/*
+!src/logs/.gitkeep
+
+# Editor
+.DS_Store
+Thumbs.db

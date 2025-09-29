@@ -1,0 +1,71 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "reload": false
+  },
+
+    "datasets": {
+    "splunk":   { "kaggle_fw": "data/samples/firewall/new_logs.csv" },
+    "sentinel": { "kaggle_fw": "data/samples/firewall/new_logs.csv" }
+  },
+
+  "logging": {
+    "level": "info"
+  },
+
+  "resources": {
+    "dashboard": "dashboard/index.html",
+    "log_file": "logs/audit.jsonl"
+  },
+
+  "proxy": {
+    "host": "127.0.0.1",
+    "port": 8030,    
+    "reload": false    
+  },
+
+  "endpoints": {
+    "cve_lookup": {
+      "enabled": true,
+      "base_url": "https://services.nvd.nist.gov/rest/json/cves/2.0",
+      "timeout": 10,
+      "rate_limit": { "rps": 2, "burst": 5, "backoff_secs": 2 }
+    },
+
+    "attack_lookup": {
+      "enabled": true,
+      "attack_file": "data/attack_techniques.json"
+    },
+
+    "check_malware": {
+      "enabled": true,
+      "base_url": "https://www.virustotal.com/api/v3/files",
+      "api_key": "ENV:VIRUSTOTAL_API_KEY",
+      "timeout": 15,
+      "rate_limit": { "rpm": 4, "burst": 4, "backoff_secs": 5 }
+    },
+
+    "splunk_search": {
+      "enabled": true,
+      "mode": "mock",
+      "patterns": ["failed login", "multiple failed logins"]
+    },
+
+    "sentinel_query": {
+      "enabled": true,
+      "mode": "mock"
+    },
+
+    "crowdstrike_lookup": {
+      "enabled": true,
+      "mode": "mock"
+    },
+
+    "create_case": {
+      "enabled": true,
+      "id_format": "CASE-2025-{counter}",
+      "default_status": "open"
+    }
+  }
+}
