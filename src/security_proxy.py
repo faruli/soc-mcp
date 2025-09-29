@@ -25,7 +25,7 @@ import time
 from src.utils.audit import log_action
 
 
-# ------------------------- Mini-Config-Loader ------------------------- #
+# ------------------------- Mini-Config-Loader ------------------------- 
 def _resolve_paths(base: Path, node: Any) -> Any:
     if isinstance(node, dict):
         out: Dict[str, Any] = {}
@@ -50,7 +50,7 @@ def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
 CFG = load_config()
 RES = CFG.get("resources", {}) or {}
 
-# ------------------------- Pfade & Dateien ---------------------------- #
+# ------------------------- Pfade & Dateien ---------------------------- 
 # Dashboard-Pfad kann Datei ODER Ordner sein:
 _dashboard_cfg = RES.get("dashboard", "dashboard/index.html")
 DASHBOARD_PATH = Path(_dashboard_cfg).resolve()
@@ -73,7 +73,7 @@ AUDIT_FILE = next((p for p in _AUDIT_CANDIDATES if p and p.exists()), _AUDIT_CAN
 ALERTS_FILE = (LOG_DIR / "_alerts.json").resolve()
 ENRICH_FILE = (LOG_DIR / "_enrich.json").resolve()
 
-# ------------------------- App --------------------------------------- #
+# ------------------------- App --------------------------------------- 
 app = FastAPI(
     title="SOC Security Proxy",
     version="1.1.0",
@@ -103,7 +103,7 @@ async def _http_audit(request, call_next):
         except Exception:
             pass
 
-# Dashboard / Static
+# ------------- Dashboard / Static -------------------------
 print(f"[dashboard] dir={DASHBOARD_DIR} index={DASHBOARD_DIR / 'index.html'} exists={(DASHBOARD_DIR / 'index.html').exists()}")
 
 @app.get("/", include_in_schema=False)
@@ -115,15 +115,15 @@ def dashboard_redirect():
     # /dashboard -> /dashboard/  (wichtig für StaticFiles & Trailing Slash)
     return RedirectResponse(url="/dashboard/")
 
-# Verzeichnis mounten, liefert bei /dashboard/ automatisch die index.html
+# ------------ Verzeichnis mounten, liefert bei /dashboard/ automatisch die index.html ------------
 if DASHBOARD_DIR.exists() and DASHBOARD_DIR.is_dir():
     app.mount(
         "/dashboard",
         StaticFiles(directory=str(DASHBOARD_DIR), html=True),
         name="dashboard",
     )
-
-# Fallback, falls kein Ordner gemountet werden konnte, wird die direkte Datei ausgeliefert
+ 
+# ----------- Fallback, falls kein Ordner gemountet werden konnte, wird die direkte Datei ausgeliefert ----
 @app.get("/dashboard/", response_class=HTMLResponse, include_in_schema=False)
 def dashboard_fallback():
     index_file = (DASHBOARD_DIR / "index.html")
@@ -166,7 +166,7 @@ def _read_jsonl_tail(path: Path, limit: int = 100) -> List[Dict[str, Any]]:
     return rows
 
 
-# ------------------------- Health ------------------------------------- #
+# ------------------------- Health ------------------------------------- 
 @app.get("/_health", summary="Health", operation_id="health")
 def health():
     dash_ok = (DASHBOARD_DIR / "index.html").exists() or (DASHBOARD_PATH.exists() and DASHBOARD_PATH.is_file())
@@ -182,7 +182,7 @@ def health():
     }
 
 
-# ------------------------- JSON Feeds fürs Dashboard ------------------ #
+# ------------------------- JSON Feeds fürs Dashboard ------------------ 
 # Audit (JSONL -> JSON)
 @app.get("/_audit.json", summary="Audit (JSON)", operation_id="get_audit")
 def get_audit(limit: int = Query(100, ge=1, le=2000)):
@@ -203,13 +203,13 @@ def get_enrich(limit: int = Query(100, ge=1, le=2000)):
     return {"items": rows, "rows": rows, "count": len(rows)}
 
 
-# ------------------------- MCP Mount ---------------------------------- #
+# ------------------------- MCP Mount ---------------------------------- 
 mcp = FastApiMCP(app)
 mcp.mount_http()    # stellt /mcp bereit
 mcp.setup_server()  # registriert FastAPI-Routen als MCP-Tools (wichtig!)
 
 
-# ------------------------- __main__ Start ------------------------------ #
+# ------------------------- __main__ Start ------------------------------ 
 if __name__ == "__main__":
     import uvicorn
     p_cfg = CFG.get("proxy", {}) or {}
