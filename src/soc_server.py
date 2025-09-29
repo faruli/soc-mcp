@@ -66,7 +66,7 @@ def _append_jsonl(path: Path, obj: dict):
         f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
 
-# --- Config ------------------------------------------------------------------
+# --- Config -------------------------------------------------
 def _resolve_paths(base: Path, node: Any) -> Any:
     if isinstance(node, dict):
         out: Dict[str, Any] = {}
@@ -189,7 +189,7 @@ SOC_ENRICH_OFFLINE = os.getenv("SOC_ENRICH_OFFLINE", "0") == "1"
 SOC_ENRICH_MAX_CVES = int(os.getenv("SOC_ENRICH_MAX_CVES", "3"))
 NVD_API_KEY = os.getenv("NVD_API_KEY")
 
-# Regex (CVE & MITRE-Techniken)
+# ------------- Regex (CVE & MITRE-Techniken) ------------------------
 CVE_RX = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
 TECH_RX = re.compile(r"\bT\d{4}(?:\.\d{3})?\b", re.IGNORECASE)
 
@@ -274,7 +274,7 @@ def enrich_in_background(alert: Dict[str, Any]) -> None:
             except Exception as e:
                 findings.append({"type": "CVE", "id": cve, "error": str(e)})
 
-        # Techniken → ATT&CK (offline Cache; live wahlweise via /attack/live/{id})
+        # ----------------- Techniken → ATT&CK (offline Cache; live wahlweise via /attack/live/{id}) --------
         for t in techs:
             try:
                 ap = _attack_lookup_offline(t) or {}
@@ -343,7 +343,7 @@ def attack_lookup(tech_id: str):
     raise HTTPException(status_code=404, detail="Technique not found")
 
 
-# ROBUSTE TAXII-Helfer (MITRE ATT&CK live)
+# -------------- ROBUSTE TAXII-Helfer (MITRE ATT&CK live) ------------
 ATTACK_TAXII_ROOT = "https://attack-taxii.mitre.org/api/v21/"
 ENTERPRISE_COLLECTION_ID = "x-mitre-collection--1f5f1533-f617-4ca8-9ab4-6a02367fa019"
 
@@ -573,7 +573,7 @@ def cve_live(cve_id: str):
             pass
 
 
-# --- Health ------------------------------------------------------------------
+# --- Health ----------------------------------------------------------
 @app.get("/_health/nvd", operation_id="nvd_health")
 def nvd_health():
     test_url = "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2024-3094&noRejected"
@@ -612,7 +612,7 @@ def taxii_health():
         return {"status": "error", "http_status": None, "detail": str(e)}
 
 
-# --- VirusTotal --------------------------------------------------------------
+# --- VirusTotal ----------------------------------------------------
 @app.get("/malware/{file_hash}", operation_id="malware_check")
 def malware_check(file_hash: str):
     api_key = os.getenv("VIRUSTOTAL_API_KEY")
@@ -634,7 +634,7 @@ def malware_check(file_hash: str):
         raise HTTPException(status_code=500, detail=f"VirusTotal error: {e}")
 
 
-# --- Splunk Export (v2) + CSV-Mock ------------------------------------------
+# --- Splunk Export (v2) + CSV-Mock --------------------------------------
 def splunk_export(query: str, base: str, token: Optional[str] = None) -> Dict[str, Any]:
     headers: Dict[str, str] = {}
     if token:
@@ -759,7 +759,7 @@ def sentinel_query_route(body: SentinelQueryBody):
     except Exception:
         pass
 
-    # 2) Echt: Azure Monitor Logs
+    # ---------- 2) Echt: Azure Monitor Logs --------------
     try:
         return sentinel_query(body.workspace_id, body.kql, body.token or "", body.timespan or "PT1H")
     except requests.HTTPError as e:
@@ -768,11 +768,11 @@ def sentinel_query_route(body: SentinelQueryBody):
         raise HTTPException(status_code=500, detail=f"Sentinel query error: {e}")
 
 
-# --- MCP-Tools registrieren --------------------------------------------------
+# --- MCP-Tools registrieren -------------------------------------------
 mcp.setup_server()
 
 
-# --- Main --------------------------------------------------------------------
+# --- Main -------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
     host = CFG.get("server", {}).get("host", "127.0.0.1")
