@@ -1,0 +1,86 @@
+Traceback (most recent call last):
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\type_adapter.py", line 270, in _init_core_attrs
+    self.core_schema = _getattr_no_parents(self._type, '__pydantic_core_schema__')
+                       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\type_adapter.py", line 55, in _getattr_no_parents
+    raise AttributeError(attribute)
+AttributeError: __pydantic_core_schema__
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\faroo\Documents\soc_mcp\src\resourceServer.py", line 89, in <module>
+    @mcp.resource(
+     ~~~~~~~~~~~~^
+        "data://docs/index?offset={offset}&limit={limit}&kind={kind}",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        mime_type="application/json",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\mcp\server\fastmcp\server.py", line 528, in decorator
+    self._resource_manager.add_template(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        fn=fn,
+        ^^^^^^
+    ...<4 lines>...
+        mime_type=mime_type,
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\mcp\server\fastmcp\resources\resource_manager.py", line 59, in add_template
+    template = ResourceTemplate.from_function(
+        fn,
+    ...<4 lines>...
+        mime_type=mime_type,
+    )
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\mcp\server\fastmcp\resources\templates.py", line 42, in from_function
+    parameters = TypeAdapter(fn).json_schema()
+                 ~~~~~~~~~~~^^^^
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\type_adapter.py", line 227, in __init__
+    self._init_core_attrs(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        ns_resolver=_namespace_utils.NsResolver(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        force=False,
+        ^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\type_adapter.py", line 289, in _init_core_attrs
+    core_schema = schema_generator.generate_schema(self._type)
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 711, in generate_schema
+    schema = self._generate_schema_inner(obj)
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 1009, in _generate_schema_inner
+    return self.match_type(obj)
+           ~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 1110, in match_type
+    return self._call_schema(obj)
+           ~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 2007, in _call_schema
+    arguments_schema = self._arguments_schema(function)
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_generate_schema.py", line 2039, in _arguments_schema
+    type_hints = _typing_extra.get_function_type_hints(function, globalns=globalns, localns=localns)
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_typing_extra.py", line 551, in get_function_type_hints
+    type_hints[name] = eval_type_backport(value, globalns, localns, type_params)
+                       ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_typing_extra.py", line 429, in eval_type_backport
+    return _eval_type_backport(value, globalns, localns, type_params)
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_typing_extra.py", line 466, in _eval_type_backport
+    return _eval_type(value, globalns, localns, type_params)
+  File "C:\Users\faroo\Documents\soc_mcp\.venv\Lib\site-packages\pydantic\_internal\_typing_extra.py", line 496, in _eval_type
+    return typing._eval_type(  # type: ignore
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+        value, globalns, localns, type_params=type_params
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\faroo\AppData\Local\Programs\Python\Python313\Lib\typing.py", line 474, in _eval_type
+    return t._evaluate(globalns, localns, type_params, recursive_guard=recursive_guard)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\faroo\AppData\Local\Programs\Python\Python313\Lib\typing.py", line 1081, in _evaluate
+    eval(self.__forward_code__, globalns, localns),
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 1, in <module>
+NameError: name 'Optional' is not defined

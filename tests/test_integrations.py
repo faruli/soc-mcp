@@ -41,3 +41,4 @@ def test_sentinel_query_route(monkeypatch):
     })
     assert r.status_code == 200
     assert r.json()["tables"][0]["rows"][0][1] == "srv01"
+

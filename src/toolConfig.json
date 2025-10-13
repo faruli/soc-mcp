@@ -1,0 +1,8 @@
+{
+  "allowedHosts": ["api.github.com", "jsonplaceholder.typicode.com"],
+  "httpTimeoutMs": 15000,
+  "allowedPaths": [
+    "C:/Users/faroo/Documents/BA_mcp",
+    "C:/Users/faroo/Documents"
+  ]
+}

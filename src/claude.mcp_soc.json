@@ -1,0 +1,43 @@
+{
+  "mcpServers": {
+    "ResourceServer": {
+      "command": "C:/Users/faroo/AppData/Local/Programs/Python/Python313/python.exe",
+      "args": [
+        "-u",
+        "C:/Users/faroo/Documents//soc_mcp/src/resourceServer.py"
+      ],
+      "cwd": "C:/Users/faroo/Documents/soc_mcp/src",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "FASTMCP_LOG_LEVEL": "debug",
+        "CONFIG_PATH": "C:/Users/faroo/Documents/soc_mcp/src/resourceConfig.json"
+      }
+    },
+
+    "ToolServer": {
+      "command": "C:/Users/faroo/AppData/Local/Programs/Python/Python313/python.exe",
+      "args": [
+        "-u",
+        "C:/Users/faroo/Documents//soc_mcp/src/toolServer.py"
+      ],
+      "cwd": "C:/Users/faroo/Documents/soc_mcp/src",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "FASTMCP_LOG_LEVEL": "debug",
+        "CONFIG_PATH": "C:/Users/faroo/Documents/BA_mcp/toolConfig.json"
+      },
+
+	"PromptServer": {
+      "command": "C:/Users/faroo/AppData/Local/Programs/Python/Python313/python.exe",
+      "args": [
+        "-u",
+        "C:/Users/faroo/Documents/soc_mcp/src/prompt.py"
+      ],
+      "cwd": "C:/Users/faroo/Documents/soc_mcp/src",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "FASTMCP_LOG_LEVEL": "debug"
+      }
+    }
+  }
+}
