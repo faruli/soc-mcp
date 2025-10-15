@@ -2,7 +2,7 @@
 SOC-Server (FastAPI + MCP)
 --------------------------
 Endpunkte (Auszug):
-- POST /alerts/ingest             -> nimmt Alerts an, triggert Auto-Enrichment (BackgroundTasks)
+- POST /alerts/ingest             -> nimmt Alerts an, erzeugt Case + Auto-Enrichment (BackgroundTasks)
 - GET  /attack/{tech_id}          -> lokale Daten (JSON/py), 404 wenn nicht gefunden
 - GET  /attack/live/{tech_id}     -> MITRE ATT&CK live via TAXII 2.1 (STIX)
 - POST /splunk/search             -> Mock-Ergebnis
@@ -40,33 +40,30 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, status
 from pydantic import BaseModel
 from fastapi_mcp import FastApiMCP
 from src.utils.audit import log_action  # Audit-Log
+from threading import Lock
 
-LOG_DIR = Path(__file__).parent / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+
+# Verzeichnisse & .env
+LOG_DIR = (Path(__file__).parent / "logs").resolve()
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # .env neben dieser Datei laden (src/.env)
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
-# Optionale TAXII/STIX-Imports sind zur Laufzeit evtl. nicht vorhanden
+# Optionale TAXII/STIX-Imports (zur Laufzeit evtl. nicht vorhanden)
 try:
     from taxii2client.v21 import Server, Collection  # type: ignore
 except Exception:
     Server = Collection = None  # type: ignore
 
-# Nur zur Typprüfung – wird nicht zur Laufzeit importiert
+# Nur zur Typprüfung
 if TYPE_CHECKING:
     from stix2 import TAXIICollectionSource as TaxiiSourceType
 else:
     TaxiiSourceType = Any  # Fallback zur Laufzeit
 
 
-def _append_jsonl(path: Path, obj: dict):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(obj, ensure_ascii=False) + "\n")
-
-
-# --- Config -------------------------------------------------
+# Konfiguration
 def _resolve_paths(base: Path, node: Any) -> Any:
     if isinstance(node, dict):
         out: Dict[str, Any] = {}
@@ -90,12 +87,55 @@ def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
 
 CFG = load_config()
 
+
+# Case/Alert
+CASE_COUNTER_FILE = LOG_DIR / "case_counter.txt"
+CASES_JSONL       = LOG_DIR / "cases.jsonl"
+ALERTS_JSONL      = LOG_DIR / "alerts.jsonl"
+CASE_LOCK = Lock()
+
+def _append_jsonl(path: Path, obj: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+
+def _read_counter() -> int:
+    try:
+        return int(CASE_COUNTER_FILE.read_text(encoding="utf-8").strip())
+    except Exception:
+        return 0
+
+def _write_counter(n: int) -> None:
+    CASE_COUNTER_FILE.write_text(str(n), encoding="utf-8")
+
+def _next_case_id() -> str:
+    id_fmt = CFG.get("endpoints", {}).get("create_case", {}).get("id_format", "CASE-2025-{counter}")
+    with CASE_LOCK:
+        n = _read_counter() + 1
+        _write_counter(n)
+    return id_fmt.replace("{counter}", f"{n:04d}")
+
+def _create_case_internal(title: str, severity: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    case_id = _next_case_id()
+    doc = {
+        "id": case_id,
+        "status": CFG.get("endpoints", {}).get("create_case", {}).get("default_status", "open"),
+        "title": title,
+        "severity": severity,
+        "context": context,
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": "alerts/ingest",
+    }
+    _append_jsonl(CASES_JSONL, doc)
+    log_action("case", {"id": case_id, "title": title, "severity": severity})
+    return doc
+
 # CSV-Mock-Quellen aus config.json
-DATASETS_CFG_SPLUNK  = (CFG.get("datasets", {}) or {}).get("splunk", {}) or {}
+DATASETS_CFG_SPLUNK   = (CFG.get("datasets", {}) or {}).get("splunk", {}) or {}
 DATASETS_CFG_SENTINEL = (CFG.get("datasets", {}) or {}).get("sentinel", {}) or {}
 
 
-# --- App & MCP ---------------------------------------------------------------
+# App & MCP
 app = FastAPI(
     title="SOC Server",
     version="1.1.0",
@@ -104,7 +144,7 @@ app = FastAPI(
     openapi_url=None,
 )
 
-# HTTP-Audit-Middleware direkt NACH app = FastAPI(...)
+# HTTP-Audit-Middleware
 @app.middleware("http")
 async def _http_audit(request, call_next):
     t0 = time.perf_counter()
@@ -128,7 +168,7 @@ mcp = FastApiMCP(app)
 mcp.mount_http()  # /mcp
 
 
-# --- Modelle (Pydantic) ------------------------------------------------------
+# Modelle
 class SplunkQuery(BaseModel):
     query: str
 
@@ -148,14 +188,22 @@ class SentinelQueryBody(BaseModel):
     token: Optional[str] = None
     timespan: Optional[str] = "PT1H"
 
+# NEU: Alert-Ingest typisiert
+class AlertIngest(BaseModel):
+    AlertName: str
+    Severity: str
+    Description: Optional[str] = ""
+    Techniques: Optional[List[str]] = []
+    Entities: Optional[Dict[str, Any]] = {}
+    Evidence: Optional[Dict[str, Any]] = {}
 
-# --- ATT&CK: lokale Daten ----------------------------------------------------
+
+# ATT&CK: lokale Daten
 DATA_DIR = Path(__file__).parent / "data"
 DATA_JSON = DATA_DIR / "attack_techniques.json"
 DATA_PY = Path(__file__).parent / "attack_techniques.py"
 
 def load_attack_data() -> List[Dict[str, Any]]:
-    """Liest Attack-Techniken: 1) aus JSON (bevorzugt), 2) optional aus .py (Fallback)."""
     if DATA_JSON.exists():
         text = DATA_JSON.read_text(encoding="utf-8")
         data = json.loads(text)
@@ -183,18 +231,16 @@ def load_attack_data() -> List[Dict[str, Any]]:
     return []
 
 
-# --- ENRICH: Einstellungen, Regex & HTTP-Session mit Retry -------------------
+# ENRICH: Einstellungen, Regex & HTTP-Session mit Retry
 SOC_ENRICH = os.getenv("SOC_ENRICH", "1") == "1"
 SOC_ENRICH_OFFLINE = os.getenv("SOC_ENRICH_OFFLINE", "0") == "1"
 SOC_ENRICH_MAX_CVES = int(os.getenv("SOC_ENRICH_MAX_CVES", "3"))
 NVD_API_KEY = os.getenv("NVD_API_KEY")
 
-# ------------- Regex (CVE & MITRE-Techniken) ------------------------
-CVE_RX = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
+CVE_RX  = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
 TECH_RX = re.compile(r"\bT\d{4}(?:\.\d{3})?\b", re.IGNORECASE)
 
 def _session_with_retry() -> requests.Session:
-    """requests.Session mit Retries & Exponential Backoff (429/5xx)."""
     s = requests.Session()
     retry = Retry(
         total=3,
@@ -209,20 +255,18 @@ def _session_with_retry() -> requests.Session:
 S = _session_with_retry()
 
 def _extract_ids(alert: Dict[str, Any]) -> Tuple[Set[str], Set[str]]:
-    """Extrahiert CVEs & Techniken aus Description/Evidence/Entities."""
     text = " ".join(filter(None, [
         alert.get("Description"),
         (alert.get("Evidence") or {}).get("Message"),
         json.dumps(alert.get("Entities", {}), ensure_ascii=False)
     ]))
-    cves = {m.upper() for m in CVE_RX.findall(text)}
+    cves  = {m.upper() for m in CVE_RX.findall(text)}
     techs = {m.upper() for m in TECH_RX.findall(text)}
     if SOC_ENRICH_MAX_CVES and len(cves) > SOC_ENRICH_MAX_CVES:
         cves = set(list(cves)[:SOC_ENRICH_MAX_CVES])
     return cves, techs
 
 def _nvd_lookup(cve: str) -> Dict[str, Any]:
-    """NVD v2: CVE-Details via cveId-Parameter abrufen."""
     base = "https://services.nvd.nist.gov/rest/json/cves/2.0"
     headers = {"User-Agent": "soc-mcp/1.1"}
     if NVD_API_KEY:
@@ -232,7 +276,6 @@ def _nvd_lookup(cve: str) -> Dict[str, Any]:
     return r.json()
 
 def _attack_lookup_offline(tech: str) -> Dict[str, Any]:
-    """Lokaler ATT&CK-Lookup aus JSON-Cache; für Live gibt es /attack/live/{tech}."""
     if DATA_JSON.exists():
         cache = json.loads(DATA_JSON.read_text(encoding="utf-8"))
         if isinstance(cache, list):
@@ -254,16 +297,12 @@ def _cvss_base_from_nvd_v2(js: Dict[str, Any]) -> float:
     return 0.0
 
 def enrich_in_background(alert: Dict[str, Any]) -> None:
-    """Auto-Enrichment: CVE + MITRE (offline Cache), Score/Severity ableiten, JSONL + Audit-Eintrag schreiben."""
     if not SOC_ENRICH:
         return
     findings: List[Dict[str, Any]] = []
     score = 50
-
     try:
         cves, techs = _extract_ids(alert)
-
-        # CVEs → NVD v2
         for cve in cves:
             try:
                 nvd = _nvd_lookup(cve)
@@ -274,7 +313,6 @@ def enrich_in_background(alert: Dict[str, Any]) -> None:
             except Exception as e:
                 findings.append({"type": "CVE", "id": cve, "error": str(e)})
 
-        # ----------------- Techniken → ATT&CK (offline Cache; live wahlweise via /attack/live/{id}) --------
         for t in techs:
             try:
                 ap = _attack_lookup_offline(t) or {}
@@ -287,52 +325,58 @@ def enrich_in_background(alert: Dict[str, Any]) -> None:
 
         severity = "high" if score >= 80 else "medium" if score >= 60 else "low"
 
-        # JSONL für Dashboard (_enrich.json)
         _append_jsonl(LOG_DIR / "_enrich.json", {
             "ts": int(time.time()),
             "alert": alert,
             "summary": {"cves": sorted(cves), "techniques": sorted(techs), "score": score, "severity": severity}
         })
 
-        # Audit-Event
         log_action("enrich", {
             "severity": severity,
             "score": score,
             "findings": findings,
             "alert": {"name": alert.get("AlertName"), "host": (alert.get("Entities") or {}).get("Host")},
         })
-
     except Exception as e:
         log_action("enrich_error", {"error": str(e)})
 
 
-# --- Endpunkte ---------------------------------------------------------------
+# Endpunkte
 @app.post("/alerts/ingest", status_code=status.HTTP_202_ACCEPTED, operation_id="alerts_ingest")
-def alerts_ingest(alert: Dict[str, Any], background_tasks: BackgroundTasks):
+def alerts_ingest(alert: AlertIngest, background_tasks: BackgroundTasks):
     """
-    Nimmt einen Alert entgegen, schreibt JSONL (_alerts.json) und startet die Anreicherung im Hintergrund.
-    Antwortet sofort (202), damit die UX/Demo flüssig bleibt.
+    Nimmt einen Alert an, persistiert ihn, erzeugt automatisch einen Case (laufende Nummer),
+    schreibt Audit-Events und startet Auto-Enrichment im Hintergrund.
     """
-    # Roh-Alert für Dashboard (_alerts.json)
-    try:
-        _append_jsonl(LOG_DIR / "_alerts.json", {"ts": int(time.time()), "alert": alert})
-    except Exception:
-        pass
+    # Roh-Alert persistieren
+    alert_doc = {
+        "type": "alert",
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "alert": alert.dict(),
+    }
+    _append_jsonl(ALERTS_JSONL, alert_doc)
 
-    # Audit
-    try:
-        log_action("ingest", {
-            "alert_name": alert.get("AlertName"),
-            "severity": alert.get("Severity"),
-            "techniques": alert.get("Techniques"),
-        })
-    except Exception:
-        pass
+    # Case erzeugen (mit Kontext aus dem Alert)
+    context = {
+        "description": alert.Description,
+        "techniques": alert.Techniques,
+        "entities": alert.Entities,
+        "evidence": alert.Evidence,
+    }
+    case_doc = _create_case_internal(alert.AlertName, alert.Severity, context)
+
+    # Audit (HTTP)
+    log_action("http", {
+        "method": "POST",
+        "path": "/alerts/ingest",
+        "status": 202,
+        "info": {"case_id": case_doc["id"], "alert": alert.AlertName}
+    })
 
     # Enrichment asynchron
-    background_tasks.add_task(enrich_in_background, alert)
-    return {"status": "accepted", "enrich": bool(SOC_ENRICH)}
+    background_tasks.add_task(enrich_in_background, alert.dict())
 
+    return {"accepted": True, "case": case_doc}
 
 @app.get("/attack/{tech_id}", operation_id="attack_lookup")
 def attack_lookup(tech_id: str):
@@ -341,7 +385,6 @@ def attack_lookup(tech_id: str):
         if isinstance(item, dict) and item.get("technique_id") == tech_id:
             return item
     raise HTTPException(status_code=404, detail="Technique not found")
-
 
 # -------------- ROBUSTE TAXII-Helfer (MITRE ATT&CK live) ------------
 ATTACK_TAXII_ROOT = "https://attack-taxii.mitre.org/api/v21/"
@@ -460,8 +503,7 @@ def attack_live(tech_id: str):
         except Exception:
             pass
 
-
-# --- Splunk Mock & Cases -----------------------------------------------------
+# Splunk Mock & Cases
 @app.post("/splunk/search", operation_id="splunk_search")
 def splunk_search(body: SplunkQuery):
     return {
@@ -482,7 +524,7 @@ def create_case(case: CaseCreate):
     }
 
 
-# --- CVE Dummy (für Tests) ---------------------------------------------------
+# CVE Dummy (Tests)
 @app.get("/cve/{cve_id}", operation_id="cve_lookup")
 def cve_lookup(cve_id: str):
     url = f"https://example.local/cve/{cve_id}"  # wird in Unit-Tests gemockt
@@ -500,7 +542,7 @@ def cve_lookup(cve_id: str):
         raise HTTPException(status_code=500, detail=f"CVE lookup error: {e}")
 
 
-# --- CVE LIVE (NVD API v2) ---------------------------------------------------
+# CVE LIVE (NVD API v2)
 @app.get("/cve/live/{cve_id}", operation_id="cve_live")
 def cve_live(cve_id: str):
     base = "https://services.nvd.nist.gov/rest/json/cves/2.0"
@@ -573,7 +615,7 @@ def cve_live(cve_id: str):
             pass
 
 
-# --- Health ----------------------------------------------------------
+# Health
 @app.get("/_health/nvd", operation_id="nvd_health")
 def nvd_health():
     test_url = "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2024-3094&noRejected"
@@ -612,7 +654,7 @@ def taxii_health():
         return {"status": "error", "http_status": None, "detail": str(e)}
 
 
-# --- VirusTotal ----------------------------------------------------
+# VirusTotal
 @app.get("/malware/{file_hash}", operation_id="malware_check")
 def malware_check(file_hash: str):
     api_key = os.getenv("VIRUSTOTAL_API_KEY")
@@ -634,7 +676,7 @@ def malware_check(file_hash: str):
         raise HTTPException(status_code=500, detail=f"VirusTotal error: {e}")
 
 
-# --- Splunk Export (v2) + CSV-Mock --------------------------------------
+# Splunk Export (v2) + CSV-Mock
 def splunk_export(query: str, base: str, token: Optional[str] = None) -> Dict[str, Any]:
     headers: Dict[str, str] = {}
     if token:
@@ -697,7 +739,7 @@ def _pick(d: dict, *candidates: str) -> str:
 
 @app.post("/splunk/export", operation_id="splunk_export")
 def splunk_export_route(body: SplunkExportBody):
-    # 1) CSV-Mock, wenn dataset=... und config.json gesetzt
+    # 1) CSV-Mock
     try:
         parsed = _parse_kv_query(body.query or "")
         ds = parsed.get("dataset")
@@ -716,7 +758,6 @@ def splunk_export_route(body: SplunkExportBody):
                 })
             return {"query": body.query, "results": mapped, "source": f"mock:{ds}"}
     except Exception:
-        # fällt zurück auf echten Export
         pass
 
     # 2) Echt: Splunk-Export REST v2
@@ -729,7 +770,7 @@ def splunk_export_route(body: SplunkExportBody):
         raise HTTPException(status_code=500, detail=f"Splunk export error: {e}")
 
 
-# --- Sentinel / Azure Monitor Logs ------------------------------------------
+# Sentinel / Azure Monitor Logs
 def sentinel_query(workspace_id: str, kql: str, token: str, timespan: str = "PT1H") -> Dict[str, Any]:
     if not token:
         raise HTTPException(status_code=400, detail="Missing Bearer token")
@@ -750,7 +791,6 @@ def sentinel_query_route(body: SentinelQueryBody):
         if ds and ds in DATASETS_CFG_SENTINEL:
             rows = _load_csv_rows(DATASETS_CFG_SENTINEL[ds])
             rows = _filter_rows(rows, parsed["kv"], parsed["limit"])
-            # simple "project"-Unterstützung
             if "project" in kql.lower():
                 after = kql.lower().split("project", 1)[1].strip()
                 cols = [c.strip() for c in after.split()[0].split(",")]
@@ -759,7 +799,7 @@ def sentinel_query_route(body: SentinelQueryBody):
     except Exception:
         pass
 
-    # ---------- 2) Echt: Azure Monitor Logs --------------
+    # 2) Echt
     try:
         return sentinel_query(body.workspace_id, body.kql, body.token or "", body.timespan or "PT1H")
     except requests.HTTPError as e:
@@ -767,12 +807,14 @@ def sentinel_query_route(body: SentinelQueryBody):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sentinel query error: {e}")
 
-
-# --- MCP-Tools registrieren -------------------------------------------
+# --------------------------------------------------------------------
+# MCP-Tools
+# --------------------------------------------------------------------
 mcp.setup_server()
 
-
-# --- Main -------------------------------------------------------------
+# --------------------------------------------------------------------
+# Main
+# --------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
     host = CFG.get("server", {}).get("host", "127.0.0.1")
