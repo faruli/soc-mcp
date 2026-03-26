@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SOC-MCP • Security Proxy Dashboard</title>
+  <style>
+    /* ======== Design-System (CSS-Variablen) ======== */
+    :root{
+      --bg: #0b0e13;
+      --bg-soft:#121722;
+      --panel:#141a26;
+      --panel-2:#0f1520;
+      --text:#e7edf7;
+      --muted:#a6b0c3;
+      --accent:#4aa8ff;
+      --accent-2:#7c4dff;
+      --ok:#35c759;
+      --warn:#ff9f0a;
+      --err:#ff453a;
+      --border: rgba(255,255,255,.08);
+      --shadow: 0 10px 24px rgba(0,0,0,.35);
+      --radius: 16px;
+      --radius-sm: 12px;
+      --radius-xs: 8px;
+      --gap: 16px;
+      --gap-lg: 22px;
+      --gap-sm: 10px;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    /* Light Mode (via Button) */
+    :root.light{
+      --bg:#f6f8fb;
+      --bg-soft:#eef2f8;
+      --panel:#ffffff;
+      --panel-2:#ffffff;
+      --text:#0c1220;
+      --muted:#4b5875;
+      --border: rgba(0,0,0,.08);
+      --shadow: 0 10px 24px rgba(0,0,0,.06);
+    }
+
+    @media (prefers-color-scheme: light){
+      :root:not(.dark){
+        --bg:#f6f8fb;
+        --bg-soft:#eef2f8;
+        --panel:#ffffff;
+        --panel-2:#ffffff;
+        --text:#0c1220;
+        --muted:#4b5875;
+        --border: rgba(0,0,0,.08);
+        --shadow: 0 10px 24px rgba(0,0,0,.06);
+      }
+    }
+
+    /* ======== Base ======== */
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background: radial-gradient(1200px 800px at 70% -10%, rgba(124,77,255,.18), transparent 40%),
+                  radial-gradient(900px 600px at -10% 0%, rgba(74,168,255,.16), transparent 45%),
+                  var(--bg);
+      color:var(--text);
+      font: 15px/1.55 var(--font);
+    }
+    a{color:var(--accent);text-decoration:none}
+    .container{max-width:1200px;margin:0 auto;padding:28px}
+    .grid{display:grid;gap:var(--gap)}
+    .grid.kpis{grid-template-columns:repeat(4, minmax(0,1fr))}
+    @media (max-width:980px){ .grid.kpis{grid-template-columns:repeat(2, minmax(0,1fr))} }
+    @media (max-width:560px){ .grid.kpis{grid-template-columns:1fr} }
+
+    /* ======== Header ======== */
+    .header{ display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--gap-lg) }
+    .brand{ display:flex;align-items:center;gap:14px; }
+    .brand .logo{
+      width:42px;height:42px;border-radius:12px;
+      background:
+        radial-gradient(40px 40px at 60% 30%, rgba(124,77,255,.35), transparent 60%),
+        radial-gradient(40px 40px at 40% 60%, rgba(74,168,255,.35), transparent 60%),
+        linear-gradient(135deg, var(--panel-2), var(--panel));
+      box-shadow: var(--shadow); border:1px solid var(--border);
+    }
+    .brand .title{font-weight:700;letter-spacing:.2px}
+    .brand .subtitle{color:var(--muted);font-size:13px}
+
+    .actions{ display:flex;align-items:center;gap:10px;flex-wrap:wrap }
+    .btn{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:10px 14px;border-radius:12px;border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.04));
+      color:var(--text);cursor:pointer;box-shadow: var(--shadow);
+      transition:transform .06s ease, background .2s ease;
+    }
+    .btn:hover{ transform: translateY(-1px) }
+    .btn.primary{
+      background: linear-gradient(180deg, rgba(74,168,255,.15), rgba(0,0,0,.05));
+      border-color: rgba(74,168,255,.35);
+    }
+    .select, .input{
+      background: var(--panel);
+      color: var(--text);
+      border:1px solid var(--border);
+      border-radius:12px;padding:10px 12px; box-shadow: var(--shadow);
+    }
+    .muted{color:var(--muted)}
+
+    /* Segment-Buttons (Feed-Umschalter) */
+    .seg {
+      display:inline-flex;gap:6px;border:1px solid var(--border);border-radius:999px;
+      padding:4px;background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.04));
+      box-shadow: var(--shadow);
+    }
+    .seg button{
+      padding:6px 10px;border:0;border-radius:999px;cursor:pointer;
+      background:white;color:black;
+    }
+    .seg button.active{ background:black;color:white }
+
+    /* ======== KPI Cards ======== */
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.06));
+      border:1px solid var(--border);
+      border-radius: var(--radius); padding:18px;
+      box-shadow: var(--shadow);
+    }
+    .card h3{margin:0 0 6px 0;font-size:13px;color:var(--muted);font-weight:600;letter-spacing:.3px}
+    .card .value{font-size:24px;font-weight:800;letter-spacing:.3px}
+    .trend{font-size:12px;margin-top:8px}
+    .trend .up{color:var(--ok)} .trend .down{color:var(--err)}
+    .sparkline{height:42px;margin-top:12px}
+
+    /* ======== Panel/Table ======== */
+    .panel{
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.06));
+      border:1px solid var(--border);
+      border-radius: var(--radius); padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .panel .panel-head{
+      display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:10px;
+    }
+    .panel .panel-title{font-weight:700}
+    .filters{display:flex;gap:10px;flex-wrap:wrap}
+    .badge{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:4px 10px;border-radius:999px;border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.04));
+      font-size:12px;color:var(--muted)
+    }
+    table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
+    thead th{
+      position:sticky;top:0;background:var(--panel);z-index:1;
+      text-align:left;padding:12px;border-bottom:1px solid var(--border);
+      font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.3px;
+      user-select:none;cursor:pointer;
+    }
+    tbody td{padding:12px;border-bottom:1px solid var(--border);font-family:var(--mono)}
+    tbody tr:hover{background: rgba(255,255,255,.03)}
+    .status{
+      padding:2px 8px;border-radius:999px;font-size:12px;
+      border:1px solid var(--border)
+    }
+    .status.ok{background: rgba(53,199,89,.12); color: var(--ok); border-color: rgba(53,199,89,.35)}
+    .status.warn{background: rgba(255,159,10,.12); color: var(--warn); border-color: rgba(255,159,10,.35)}
+    .status.err{background: rgba(255,69,58,.12); color: var(--err); border-color: rgba(255,69,58,.35)}
+    .foot{ display:flex;align-items:center;justify-content:space-between; margin-top:12px;color:var(--muted);font-size:12px }
+
+    /* ======== Footer ======== */
+    .footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <div class="title">Security Proxy Dashboard</div>
+          <div class="subtitle">SOC-MCP • Live-Audit &amp; Monitoring</div>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="seg" id="feedSeg" title="Feed wählen (1=A, 2=L, 3=E)">
+          <button data-feed="audit"  class="active">Audit</button>
+          <button data-feed="alerts">Alerts</button>
+          <button data-feed="enrich">Enrich</button>
+        </div>
+        <select id="interval" class="select" title="Auto-Refresh">
+          <option value="5">Auto: 5s</option>
+          <option value="10">Auto: 10s</option>
+          <option value="30" selected>Auto: 30s</option>
+          <option value="0">Auto: aus</option>
+        </select>
+        <input id="search" class="input" placeholder="Filter (Pfad/Name, Severity, …)" />
+        <button id="refresh" class="btn primary" title="Jetzt aktualisieren">🔄 Aktualisieren</button>
+        <button id="toggleTheme" class="btn" title="Hell/Dunkel umschalten">🌓 Theme</button>
+      </div>
+    </div>
+
+    <!-- KPI Grid -->
+    <div class="grid kpis">
+      <div class="card">
+        <h3 id="kpi1-title">Events (letzte N)</h3>
+        <div class="value" id="kpi-req">–</div>
+        <div class="trend"><span id="kpi-req-trend" class="muted">–</span></div>
+        <svg class="sparkline" id="spark-req" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="card">
+        <h3 id="kpi2-title">Ø Latenz</h3>
+        <div class="value" id="kpi-lat">–</div>
+        <div class="trend"><span class="muted" id="kpi2-unit">ms</span></div>
+        <svg class="sparkline" id="spark-lat" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="card">
+        <h3 id="kpi3-title">Fehler/High</h3>
+        <div class="value" id="kpi-err">–</div>
+        <div class="trend"><span class="muted" id="kpi3-desc">% Fehler (audit) / % high (alerts)</span></div>
+        <svg class="sparkline" id="spark-err" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="card">
+        <h3>Letzte Aktualisierung</h3>
+        <div class="value" id="kpi-ts">–</div>
+        <div class="trend"><span id="kpi-ts-rel" class="muted">–</span></div>
+        <svg class="sparkline" id="spark-dummy" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      </div>
+    </div>
+
+    <!-- Tabelle -->
+    <div class="panel" style="margin-top: var(--gap-lg)">
+      <div class="panel-head">
+        <div class="panel-title" id="panelTitle">Audit-Events</div>
+        <div class="filters">
+          <span class="badge">Quelle: <code id="feedBadge">/_audit.json</code></span>
+          <span class="badge">Limit: <span id="limitBadge">100</span></span>
+        </div>
+      </div>
+      <div style="overflow:auto; max-height: 52vh; border-radius: var(--radius); border:1px solid var(--border)">
+        <table id="table">
+          <thead>
+            <tr id="theadRow">
+              <!-- Spalten werden dynamisch gesetzt -->
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="foot">
+        <div>Zeilen: <span id="rows">–</span></div>
+        <div id="status" class="muted">Bereit.</div>
+      </div>
+    </div>
+
+    <div class="footer">© SOC-MCP Proxy • Demo-Dashboard – lokal betrieben</div>
+  </div>
+
+  <script>
+    // ======== Theme Toggle ========
+    const root = document.documentElement;
+    document.getElementById('toggleTheme').addEventListener('click', () => {
+      root.classList.toggle('dark');
+      localStorage.setItem('prefers-dark', root.classList.contains('dark') ? '1' : '0');
+    });
+    if (localStorage.getItem('prefers-dark') === '1') root.classList.add('dark');
+
+    // ======== Feed-State ========
+    const FEEDS = { audit: "/_audit.json", alerts: "/_alerts.json", enrich: "/_enrich.json" };
+    let FEED = localStorage.getItem('soc_mcp_feed') || 'audit';
+
+    function setFeed(newFeed){
+      FEED = newFeed;
+      localStorage.setItem('soc_mcp_feed', FEED);
+      // UI
+      document.querySelectorAll('#feedSeg button').forEach(b=>{
+        b.classList.toggle('active', b.dataset.feed === FEED);
+      });
+      document.getElementById('feedBadge').textContent = FEEDS[FEED];
+      document.getElementById('panelTitle').textContent =
+        FEED === 'audit' ? 'Audit-Events' :
+        FEED === 'alerts' ? 'Alerts (Ingest)' : 'Enrichment (Auto)';
+      // KPI Labels
+      document.getElementById('kpi1-title').textContent = FEED === 'audit' ? 'Requests (letzte N)' : 'Events (letzte N)';
+      document.getElementById('kpi2-title').textContent = FEED === 'audit' ? 'Ø Latenz' : 'Ø Score/Latency';
+      document.getElementById('kpi2-unit').textContent = FEED === 'audit' ? 'ms' : (FEED==='enrich' ? 'Score' : '—');
+      document.getElementById('kpi3-title').textContent = FEED === 'audit' ? 'Fehlerquote' : 'High-Quote';
+      document.getElementById('kpi3-desc').textContent = FEED === 'audit' ? '% Fehler (4xx/5xx)' : '% severity=high';
+      // Spalten neu zeichnen
+      drawHeader();
+      // sofort Daten holen
+      fetchData();
+    }
+
+    // ======== State ========
+    let dataItems = [];
+    let sortKey = 'ts';
+    let sortAsc = false; // neueste oben
+    let timer = null;
+    const limitDefault = 100;
+
+    // ======== Helpers ========
+    const fmt = new Intl.DateTimeFormat('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    function relative(ts){
+      const diff = (Date.now() - ts)/1000;
+      if(diff < 60) return `${Math.floor(diff)}s`;
+      if(diff < 3600) return `${Math.floor(diff/60)}m`;
+      return `${Math.floor(diff/3600)}h`;
+    }
+    function statusClass(code){
+      if(code >= 500) return 'status err';
+      if(code >= 400) return 'status warn';
+      return 'status ok';
+    }
+    function sevClass(sev){
+      const s = String(sev||'').toLowerCase();
+      if(s === 'high') return 'status err';
+      if(s === 'medium') return 'status warn';
+      return 'status ok';
+    }
+    function setStatus(msg, isErr=false){
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.style.color = isErr ? 'var(--err)' : 'var(--muted)';
+    }
+
+    // ======== Tabellenkopf dynamisch ========
+    function drawHeader(){
+      const thead = document.getElementById('theadRow');
+      thead.innerHTML = '';
+      const cols =
+        FEED === 'audit'  ? [
+          ['ts','Zeit'], ['method','Methode'], ['path','Pfad'], ['status','Status'], ['duration_ms','Latenz (ms)']
+        ] :
+        FEED === 'alerts' ? [
+          ['ts','Zeit'], ['alert_name','Alert'], ['severity','Severity'], ['host','Ziel'], ['techniques','Techniques']
+        ] :
+        /* enrich */       [
+          ['ts','Zeit'], ['alert_name','Alert'], ['severity','Severity'], ['score','Score'], ['cve_mitre','CVEs/MITRE']
+        ];
+      cols.forEach(([key,label])=>{
+        const th = document.createElement('th');
+        th.dataset.sort = key;
+        th.textContent = label;
+        th.addEventListener('click', ()=> sortData(key));
+        thead.appendChild(th);
+      });
+      setSortIndicators();
+    }
+
+    // ======== Normalizer pro Feed ========
+    function normalizeAudit(js){
+      const arr = (js.items || js.rows || []);
+      return arr.map((it) => {
+        const d = it.details || it;
+        const ts = it.timestamp ? Date.parse(it.timestamp) : (d.ts ? Date.parse(d.ts) : Date.now());
+        return {
+          ts,
+          method: d.method ?? d.http_method ?? '-',
+          path: d.path ?? d.url ?? d.endpoint ?? '-',
+          status: Number(d.status ?? d.code ?? 0),
+          duration_ms: Number(d.duration_ms ?? d.latency_ms ?? 0),
+        };
+      });
+    }
+
+    function normalizeAlerts(js){
+      const arr = (js.rows || js.items || []);
+      return arr.map((row)=>{
+        const a = row.alert || {};
+        const sev = (a.Severity || '').toLowerCase();
+        const when = (a.Evidence && a.Evidence.When) ? Date.parse(a.Evidence.When) : (row.ts ? row.ts*1000 : Date.now());
+        const techs = Array.isArray(a.Techniques) ? a.Techniques.join(', ') : '';
+        const host = (a.Entities && (a.Entities.Host || a.Entities.Dst || a.Entities.Destination)) || '';
+        return {
+          ts: isNaN(when) ? Date.now() : when,
+          alert_name: a.AlertName || '(ohne Titel)',
+          severity: sev || 'low',
+          host: host,
+          techniques: techs
+        };
+      });
+    }
+
+    function normalizeEnrich(js){
+      const arr = (js.rows || js.items || []);
+      return arr.map((row)=>{
+        const a = row.alert || {};
+        const s = row.summary || {};
+        const when = a.Evidence && a.Evidence.When ? Date.parse(a.Evidence.When) : (row.ts ? row.ts*1000 : Date.now());
+        const cves = (s.cves || []).join(', ');
+        const techs = (s.techniques || a.Techniques || []).join(', ');
+        return {
+          ts: isNaN(when) ? Date.now() : when,
+          alert_name: a.AlertName || '(ohne Titel)',
+          severity: (s.severity || a.Severity || 'low').toLowerCase(),
+          score: Number(s.score || 0),
+          cve_mitre: [cves, techs].filter(Boolean).join(' • ')
+        };
+      });
+    }
+
+    // ======== Sortierung & Rendering ========
+    function sortData(key){
+      sortAsc = (sortKey === key) ? !sortAsc : true;
+      sortKey = key;
+      dataItems.sort((a,b)=>{
+        const va = a[key], vb = b[key];
+        if(typeof va === 'number' && typeof vb === 'number') return sortAsc ? va - vb : vb - va;
+        return sortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+      });
+      renderTable();
+      setSortIndicators();
+    }
+
+    function setSortIndicators(){
+      document.querySelectorAll('th[data-sort]').forEach(th=>{
+        th.textContent = th.textContent.replace(/[\u25B2\u25BC]\s*$/,'').trim();
+        if(th.dataset.sort === sortKey){
+          th.textContent += sortAsc ? ' \u25B2' : ' \u25BC';
+        }
+      });
+    }
+
+    function renderTable(){
+      const q = document.getElementById('search').value.trim().toLowerCase();
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+      let count = 0;
+
+      for(const it of dataItems){
+        // Suchtext je Feed
+        const text =
+          FEED === 'audit'  ? `${it.method} ${it.path} ${it.status}`.toLowerCase() :
+          FEED === 'alerts' ? `${it.alert_name} ${it.severity} ${it.host} ${it.techniques}`.toLowerCase() :
+                              `${it.alert_name} ${it.severity} ${it.score} ${it.cve_mitre}`.toLowerCase();
+        if(q && !text.includes(q)) continue;
+
+        const tr = document.createElement('tr');
+        const dt = new Date(it.ts || Date.now());
+
+        if(FEED === 'audit'){
+          tr.innerHTML = `
+            <td>${fmt.format(dt)}</td>
+            <td><code>${it.method}</code></td>
+            <td>${it.path}</td>
+            <td><span class="${statusClass(it.status)}">${it.status}</span></td>
+            <td>${Number(it.duration_ms ?? 0).toFixed(2)}</td>
+          `;
+        } else if(FEED === 'alerts'){
+          tr.innerHTML = `
+            <td>${fmt.format(dt)}</td>
+            <td>${it.alert_name}</td>
+            <td><span class="${sevClass(it.severity)}">${it.severity.toUpperCase()}</span></td>
+            <td>${it.host || '-'}</td>
+            <td>${it.techniques || '-'}</td>
+          `;
+        } else { // enrich
+          tr.innerHTML = `
+            <td>${fmt.format(dt)}</td>
+            <td>${it.alert_name}</td>
+            <td><span class="${sevClass(it.severity)}">${String(it.severity).toUpperCase()}</span></td>
+            <td>${Number(it.score ?? 0).toFixed(0)}</td>
+            <td>${it.cve_mitre || '-'}</td>
+          `;
+        }
+        tbody.appendChild(tr);
+        count++;
+      }
+      document.getElementById('rows').textContent = count;
+    }
+
+    function drawSparkline(svgId, nums, stroke = 'url(#grad)'){
+      const svg = document.getElementById(svgId);
+      if(!svg) return;
+      const w = 200, h = 40, pad = 2;
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="grad" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%"  stop-color="var(--accent)"/>
+            <stop offset="100%" stop-color="var(--accent-2)"/>
+          </linearGradient>
+        </defs>
+      `;
+      if(!nums || nums.length === 0){ return; }
+      const min = Math.min(...nums), max = Math.max(...nums);
+      const norm = (v)=> max===min ? h/2 : h - pad - ((v - min)/(max - min))*(h - pad*2);
+      const step = (w - pad*2) / Math.max(1, nums.length - 1);
+      let d = `M ${pad} ${norm(nums[0])}`;
+      nums.forEach((v, i)=>{ d += ` L ${pad + i*step} ${norm(v)}`; });
+      const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d', d);
+      p.setAttribute('fill','none');
+      p.setAttribute('stroke', stroke);
+      p.setAttribute('stroke-width','2.2');
+      p.setAttribute('stroke-linecap','round');
+      svg.appendChild(p);
+    }
+
+    function updateKpis(items){
+      if(FEED === 'audit'){
+        const n = items.length;
+        const errs = items.filter(x=>x.status>=400).length;
+        const lat = n ? (items.reduce((s,x)=>s+(x.duration_ms||0),0)/n) : 0;
+        const lastTs = n ? (items[n-1].ts || Date.now()) : Date.now();
+        const prevN = Number(document.getElementById('kpi-req').dataset.prev || 0);
+        const trend = (prevN && n!==prevN) ? (n > prevN ? `▲ +${n-prevN}` : `▼ ${n-prevN}`) : '–';
+        document.getElementById('kpi-req').dataset.prev = String(n);
+
+        document.getElementById('kpi-req').textContent = n;
+        document.getElementById('kpi-req-trend').textContent = trend;
+        document.getElementById('kpi-lat').textContent = lat.toFixed(1) + ' ms';
+        document.getElementById('kpi-err').textContent = (n? (errs/n*100):0).toFixed(1) + '%';
+
+        const dt = new Date(lastTs);
+        document.getElementById('kpi-ts').textContent = fmt.format(dt);
+        document.getElementById('kpi-ts-rel').textContent = relative(lastTs);
+
+        const recent = items.slice(-30);
+        drawSparkline('spark-req', recent.map((_,i)=>i+1));
+        drawSparkline('spark-lat', recent.map(x=>x.duration_ms||0));
+        drawSparkline('spark-err', recent.map(x=> (x.status>=400)?1:0 ));
+      } else if(FEED === 'alerts'){
+        const n = items.length;
+        const high = items.filter(x=>String(x.severity).toLowerCase()==='high').length;
+        const lastTs = n ? (items[0].ts || Date.now()) : Date.now(); // bereits neueste oben
+        document.getElementById('kpi-req').textContent = n;
+        document.getElementById('kpi-req-trend').textContent = '–';
+        document.getElementById('kpi-lat').textContent = '—';
+        document.getElementById('kpi-err').textContent = (n? (high/n*100):0).toFixed(1) + '%';
+        document.getElementById('kpi-ts').textContent = fmt.format(new Date(lastTs));
+        document.getElementById('kpi-ts-rel').textContent = relative(lastTs);
+        drawSparkline('spark-req', items.slice(0,30).map((_,i)=>i+1));
+        drawSparkline('spark-lat', []);
+        drawSparkline('spark-err', items.slice(0,30).map(x=> String(x.severity).toLowerCase()==='high' ? 1 : 0));
+      } else { // enrich
+        const n = items.length;
+        const lastTs = n ? (items[0].ts || Date.now()) : Date.now();
+        const avgScore = n ? (items.reduce((s,x)=>s+(x.score||0),0)/n) : 0;
+        const high = items.filter(x=>String(x.severity).toLowerCase()==='high').length;
+        document.getElementById('kpi-req').textContent = n;
+        document.getElementById('kpi-req-trend').textContent = '–';
+        document.getElementById('kpi-lat').textContent = avgScore.toFixed(0);
+        document.getElementById('kpi-err').textContent = (n? (high/n*100):0).toFixed(1) + '%';
+        document.getElementById('kpi-ts').textContent = fmt.format(new Date(lastTs));
+        document.getElementById('kpi-ts-rel').textContent = relative(lastTs);
+        drawSparkline('spark-req', items.slice(0,30).map((_,i)=>i+1));
+        drawSparkline('spark-lat', items.slice(0,30).map(x=> x.score||0));
+        drawSparkline('spark-err', items.slice(0,30).map(x=> String(x.severity).toLowerCase()==='high' ? 1 : 0));
+      }
+    }
+
+    // ======== Fetch / Polling ========
+    async function fetchData(){
+      const limit = limitDefault;
+      document.getElementById('limitBadge').textContent = String(limit);
+      setStatus('Lade …');
+      try{
+        const url = `${FEEDS[FEED]}?limit=${limit}`;
+        const res = await fetch(url, {cache:'no-store'});
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        const js = await res.json();
+
+        const items =
+          FEED === 'audit'  ? normalizeAudit(js) :
+          FEED === 'alerts' ? normalizeAlerts(js) :
+                              normalizeEnrich(js);
+
+        // jüngste zuerst
+        items.sort((a,b)=> b.ts - a.ts);
+
+        dataItems = items;
+        sortKey = 'ts'; sortAsc = false;
+        renderTable();
+        setSortIndicators();
+        updateKpis(items);
+        setStatus(`OK • ${new Date().toLocaleTimeString('de-DE')}`);
+      }catch(err){
+        setStatus('Fehler beim Laden: ' + (err?.message || err), true);
+      }
+    }
+
+    function setupAutoRefresh(){
+      const sel = document.getElementById('interval');
+      const val = Number(sel.value);
+      if(timer){ clearInterval(timer); timer = null; }
+      if(val>0){ timer = setInterval(fetchData, val*1000); }
+    }
+
+    // ======== Events ========
+    document.getElementById('refresh').addEventListener('click', fetchData);
+    document.getElementById('interval').addEventListener('change', setupAutoRefresh);
+    document.getElementById('search').addEventListener('input', renderTable);
+
+    // Feed-Buttons
+    document.querySelectorAll('#feedSeg button').forEach(b=>{
+      b.addEventListener('click', ()=> setFeed(b.dataset.feed));
+    });
+    // Shortcuts: 1=audit, 2=alerts, 3=enrich
+    window.addEventListener('keydown', (e)=>{
+      if(e.key==='1') setFeed('audit');
+      if(e.key==='2') setFeed('alerts');
+      if(e.key==='3') setFeed('enrich');
+    });
+
+    // ======== Init ========
+    drawHeader();
+    setFeed(FEED);        // stellt UI + Badge + Titel + holt Daten
+    setupAutoRefresh();
+  </script>
+</body>
+</html>

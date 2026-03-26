@@ -55,19 +55,26 @@ def map_techniques_by_port(port: str) -> list[str]:
         return ["T1021.004"]  # SSH
     if p == 445:
         return ["T1021.002"]  # SMB
+    # Ergänzung: häufige Ports damit das Dashboard "Techniques" zeigt
+    if p == 53:
+        return ["T1071.004"]  # App Layer Protocol: DNS
+    if p in (80, 443):
+        return ["T1071.001"]  # App Layer Protocol: Web
     return []
 
 
 def severity_from_action(action: str, dpt: str = "") -> str:
     """Schweregrad grob aus Aktion/Port ableiten (Demo-freundlich)."""
     a = (action or "").lower()
-    if "deny" in a or "block" in a or "drop" in a or "dropped" in a:
+    if any(w in a for w in ("deny", "block", "drop", "dropped")):
         return "Medium"
-    # leichte Anhebung für sensible Admin-Ports
+    # leichte Anhebung für sensible Admin-/Remote-Ports
     try:
         p = int(str(dpt).strip())
         if p in (22, 3389, 445):
             return "Medium"
+        # DNS/Web bewusst Low lassen; bei Bedarf aktivieren:
+        # if p in (53, 80, 443): return "Medium"
     except Exception:
         pass
     return "Low"
@@ -127,7 +134,7 @@ def main():
     FB_DPT = ["dpt", "destinationport", "dest_port", "dport", "destination port"]
     FB_ACT = ["action", "status", "decision", "log subtype", "event type", "rule action"]
     FB_MSG = ["message", "msg", "rule name", "rule", "event", "description"]
-    # neue Fallbacks
+    # weitere Fallbacks
     FB_RULE = ["firewall rule name", "rule name", "firewall rule"]
     FB_NAT = ["nat rule name", "nat rule"]
     FB_PROTO = ["protocol", "proto"]
@@ -141,7 +148,6 @@ def main():
     prefer_msg = [args.col_message] if args.col_message else []
 
     def build_alert(row: dict) -> dict:
-        # ------- HIER dein gewünschter Block (voll integriert) -------
         ts = pick(row, prefer_ts, FB_TS)
         src = pick(row, prefer_src, FB_SRC)
         dst = pick(row, prefer_dst, FB_DST)
@@ -165,7 +171,7 @@ def main():
 
         techs = map_techniques_by_port(dpt)
 
-        # Hübsche Description ohne überflüssiges " | "
+        # Description ohne überflüssiges " | "
         core = f"{(act or '').strip()} {(src or '').strip()} -> {(dst or '').strip()}:{(dpt or '').strip()}".strip()
         desc = f"{core} | {msg}".strip() if msg else core
 
@@ -178,7 +184,6 @@ def main():
             "Entities": {"Host": dst, "Account": ""},
             "Evidence": {"Message": desc, "When": as_iso(ts)},
         }
-        # -------------------------------------------------------------
 
     # Debug-Vorschau
     if args.debug:

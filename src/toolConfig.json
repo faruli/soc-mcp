@@ -3,6 +3,6 @@
   "httpTimeoutMs": 15000,
   "allowedPaths": [
     "C:/Users/faroo/Documents/BA_mcp",
-    "C:/Users/faroo/Documents"
+    "C:/Users/faroo/"
   ]
 }

@@ -1,7 +1,11 @@
 # demo.ps1 – schickt 5 Beispiel-Alerts im SOC-Server
 
 param(
+<<<<<<< HEAD
   [string]$ServerUri = "http://127.0.0.1:8000/alerts/ingest",  # Ziel-Endpoint
+=======
+  [string]$ServerUri = "http://127.0.0.1:8000/alerts/ingest",  # Ziel-Endpoint (API-Port, nicht Proxy)
+>>>>>>> 818d9d5 (Update: alle Dateien)
   [int]$PauseSekunden = 6,                                     # Wartezeit zwischen Alerts
   [ValidateSet('dashboard','legacy','both')]
   [string]$Schema = 'both',                                    # Feldschema
@@ -36,7 +40,11 @@ function New-AlertBody {
   # Legacy Schema
   $legacy = @{
     AlertName   = $Name
+<<<<<<< HEAD
     Severity    = $sevTitle                  
+=======
+    Severity    = $sevTitle
+>>>>>>> 818d9d5 (Update: alle Dateien)
     Description = $Description
     Techniques  = $Techniques
     Entities    = @{
@@ -48,6 +56,24 @@ function New-AlertBody {
     }
   }
 
+<<<<<<< HEAD
+=======
+  # *** Minimaler Fix: Auto-Erkennung für /cases/ (CaseCreate-Schema) ***
+  if ($ServerUri -like '*/cases' -or $ServerUri -like '*/cases/') {
+    return @{
+      title    = $Name
+      severity = $sevLower
+      context  = @{
+        description = $Description
+        techniques  = $Techniques
+        host        = $Hostname
+        source      = "demo.ps1"
+        ts          = (Get-Date).ToUniversalTime().ToString("o")
+      }
+    }
+  }
+
+>>>>>>> 818d9d5 (Update: alle Dateien)
   switch ($Schema) {
     'dashboard' { return $dash }
     'legacy'    { return $legacy }
@@ -67,7 +93,11 @@ function Send-Alert {
     [Parameter(Mandatory)][string]$Name,
     [Parameter(Mandatory)][string]$Description,
     [Parameter(Mandatory)][string[]]$Techniques,
+<<<<<<< HEAD
     [Parameter(Mandatory)][string]$Hostname,       
+=======
+    [Parameter(Mandatory)][string]$Hostname,       # NICHT $host (reserviert)
+>>>>>>> 818d9d5 (Update: alle Dateien)
     [ValidateSet('Low','Medium','High','Critical')]
     [string]$Severity = 'Medium'
   )

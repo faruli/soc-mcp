@@ -94,7 +94,7 @@ async def http_get(url: str, headers: Optional[dict] = None) -> dict:
 def read_text_file(file_path: str, max_bytes: int = 500_000) -> str:
     target = Path(file_path).resolve()
     if not _allowed_path(target):
-        raise ValueError("Pfad nicht erlaubt – allowedPaths in config.json setzen.")
+        raise ValueError("Pfad nicht erlaubt - allowedPaths in config.json setzen.")
     data = target.read_bytes()
     return data[:max_bytes].decode("utf-8", errors="replace")
 
@@ -102,7 +102,7 @@ def read_text_file(file_path: str, max_bytes: int = 500_000) -> str:
 def list_dir(dir_path: str) -> List[str]:
     target = Path(dir_path).resolve()
     if not _allowed_path(target):
-        raise ValueError("Pfad nicht erlaubt – allowedPaths in config.json setzen.")
+        raise ValueError("Pfad nicht erlaubt - allowedPaths in config.json setzen.")
     return sorted(p.name for p in target.iterdir())
 
 @mcp.tool()

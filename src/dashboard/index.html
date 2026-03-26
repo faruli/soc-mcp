@@ -366,41 +366,59 @@
       });
     }
 
-    function normalizeAlerts(js){
-      const arr = (js.rows || js.items || []);
-      return arr.map((row)=>{
-        const a = row.alert || {};
-        const sev = (a.Severity || '').toLowerCase();
-        const when = (a.Evidence && a.Evidence.When) ? Date.parse(a.Evidence.When) : (row.ts ? row.ts*1000 : Date.now());
-        const techs = Array.isArray(a.Techniques) ? a.Techniques.join(', ') : '';
-        const host = (a.Entities && (a.Entities.Host || a.Entities.Dst || a.Entities.Destination)) || '';
-        return {
-          ts: isNaN(when) ? Date.now() : when,
-          alert_name: a.AlertName || '(ohne Titel)',
-          severity: sev || 'low',
-          host: host,
-          techniques: techs
-        };
-      });
-    }
+// --- Alerts ---
+function normalizeAlerts(js){
+  const arr = (js.rows || js.items || []);
+  return arr.map((row)=>{
+    const a = row.alert || row || {};
+    // Zeit robust bestimmen
+    let whenStr = (a.Evidence && a.Evidence.When) ? a.Evidence.When : (row.ts || a.ts || '');
+    let when = Date.parse(whenStr);
+    if (isNaN(when)) when = Date.now();
 
-    function normalizeEnrich(js){
-      const arr = (js.rows || js.items || []);
-      return arr.map((row)=>{
-        const a = row.alert || {};
-        const s = row.summary || {};
-        const when = a.Evidence && a.Evidence.When ? Date.parse(a.Evidence.When) : (row.ts ? row.ts*1000 : Date.now());
-        const cves = (s.cves || []).join(', ');
-        const techs = (s.techniques || a.Techniques || []).join(', ');
-        return {
-          ts: isNaN(when) ? Date.now() : when,
-          alert_name: a.AlertName || '(ohne Titel)',
-          severity: (s.severity || a.Severity || 'low').toLowerCase(),
-          score: Number(s.score || 0),
-          cve_mitre: [cves, techs].filter(Boolean).join(' • ')
-        };
-      });
-    }
+    const sev = (a.severity || a.Severity || '').toString().toLowerCase();
+    const techsArr = (a.Techniques || a.techniques) || [];
+    const techs = Array.isArray(techsArr) ? techsArr.join(', ') : String(techsArr || '');
+    const host =
+      (a.Entities && (a.Entities.Host || a.Entities.host)) ||
+      (a.target && a.target.host) ||
+      '';
+
+    return {
+      ts: when,
+      alert_name: a.AlertName || a.title || a.name || '(ohne Titel)',
+      severity: sev || 'low',
+      host,
+      techniques: techs
+    };
+  });
+}
+
+function normalizeEnrich(js){
+  const arr = (js.rows || js.items || []);
+  return arr.map((row)=>{
+    const a = row.alert || {};
+    const s = row.summary || {};
+    let whenStr = (a.Evidence && a.Evidence.When) ? a.Evidence.When : (row.ts || a.ts || '');
+    let when = Date.parse(whenStr);
+    if (isNaN(when)) when = Date.now();
+
+    const cves = Array.isArray(s.cves) ? s.cves.join(', ') : '';
+    const techList = s.techniques || a.Techniques || [];
+    const techs = Array.isArray(techList) ? techList.join(', ') : String(techList || '');
+    const sev = (s.severity || a.Severity || a.severity || 'low').toString().toLowerCase();
+
+    return {
+      ts: when,
+      alert_name: a.AlertName || a.title || a.name || '(ohne Titel)',
+      severity: sev,
+      score: Number(s.score || 0),
+      cve_mitre: [cves, techs].filter(Boolean).join(' • ')
+    };
+  });
+}
+
+
 
     // ======== Sortierung & Rendering ========
     function sortData(key){

@@ -6,8 +6,8 @@
   },
 
     "datasets": {
-    "splunk":   { "kaggle_fw": "data/samples/firewall/new_logs.csv" },
-    "sentinel": { "kaggle_fw": "data/samples/firewall/new_logs.csv" }
+    "splunk":   { "kaggle_fw": "src/data/samples/firewall/new_logs.csv" },
+    "sentinel": { "kaggle_fw": "src/data/samples/firewall/new_logs.csv" }
   },
 
   "logging": {

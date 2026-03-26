@@ -40,12 +40,9 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, status
 from pydantic import BaseModel
 from fastapi_mcp import FastApiMCP
 from src.utils.audit import log_action  # Audit-Log
-from threading import Lock
 
-
-# Verzeichnisse & .env
-LOG_DIR = (Path(__file__).parent / "logs").resolve()
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
 
 # .env neben dieser Datei laden (src/.env)
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
@@ -87,49 +84,6 @@ def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
 
 CFG = load_config()
 
-
-# Case/Alert
-CASE_COUNTER_FILE = LOG_DIR / "case_counter.txt"
-CASES_JSONL       = LOG_DIR / "cases.jsonl"
-ALERTS_JSONL      = LOG_DIR / "alerts.jsonl"
-CASE_LOCK = Lock()
-
-def _append_jsonl(path: Path, obj: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(obj, ensure_ascii=False) + "\n")
-
-def _read_counter() -> int:
-    try:
-        return int(CASE_COUNTER_FILE.read_text(encoding="utf-8").strip())
-    except Exception:
-        return 0
-
-def _write_counter(n: int) -> None:
-    CASE_COUNTER_FILE.write_text(str(n), encoding="utf-8")
-
-def _next_case_id() -> str:
-    id_fmt = CFG.get("endpoints", {}).get("create_case", {}).get("id_format", "CASE-2025-{counter}")
-    with CASE_LOCK:
-        n = _read_counter() + 1
-        _write_counter(n)
-    return id_fmt.replace("{counter}", f"{n:04d}")
-
-def _create_case_internal(title: str, severity: str, context: Dict[str, Any]) -> Dict[str, Any]:
-    case_id = _next_case_id()
-    doc = {
-        "id": case_id,
-        "status": CFG.get("endpoints", {}).get("create_case", {}).get("default_status", "open"),
-        "title": title,
-        "severity": severity,
-        "context": context,
-        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "source": "alerts/ingest",
-    }
-    _append_jsonl(CASES_JSONL, doc)
-    log_action("case", {"id": case_id, "title": title, "severity": severity})
-    return doc
-
 # CSV-Mock-Quellen aus config.json
 DATASETS_CFG_SPLUNK   = (CFG.get("datasets", {}) or {}).get("splunk", {}) or {}
 DATASETS_CFG_SENTINEL = (CFG.get("datasets", {}) or {}).get("sentinel", {}) or {}
@@ -168,7 +122,7 @@ mcp = FastApiMCP(app)
 mcp.mount_http()  # /mcp
 
 
-# Modelle
+# --- Modelle (Pydantic) ------------------------------------------------------
 class SplunkQuery(BaseModel):
     query: str
 
@@ -325,6 +279,7 @@ def enrich_in_background(alert: Dict[str, Any]) -> None:
 
         severity = "high" if score >= 80 else "medium" if score >= 60 else "low"
 
+        # JSONL für Dashboard (_enrich.json)
         _append_jsonl(LOG_DIR / "_enrich.json", {
             "ts": int(time.time()),
             "alert": alert,
@@ -348,33 +303,25 @@ def alerts_ingest(alert: AlertIngest, background_tasks: BackgroundTasks):
     Nimmt einen Alert an, persistiert ihn, erzeugt automatisch einen Case (laufende Nummer),
     schreibt Audit-Events und startet Auto-Enrichment im Hintergrund.
     """
-    # Roh-Alert persistieren
-    alert_doc = {
-        "type": "alert",
-        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "alert": alert.dict(),
-    }
-    _append_jsonl(ALERTS_JSONL, alert_doc)
+    # Roh-Alert für Dashboard (_alerts.json)
+    try:
+        _append_jsonl(LOG_DIR / "_alerts.json", {"ts": int(time.time()), "alert": alert})
+    except Exception:
+        pass
 
-    # Case erzeugen (mit Kontext aus dem Alert)
-    context = {
-        "description": alert.Description,
-        "techniques": alert.Techniques,
-        "entities": alert.Entities,
-        "evidence": alert.Evidence,
-    }
-    case_doc = _create_case_internal(alert.AlertName, alert.Severity, context)
-
-    # Audit (HTTP)
-    log_action("http", {
-        "method": "POST",
-        "path": "/alerts/ingest",
-        "status": 202,
-        "info": {"case_id": case_doc["id"], "alert": alert.AlertName}
-    })
+    # Audit
+    try:
+        log_action("ingest", {
+            "alert_name": alert.get("AlertName"),
+            "severity": alert.get("Severity"),
+            "techniques": alert.get("Techniques"),
+        })
+    except Exception:
+        pass
 
     # Enrichment asynchron
-    background_tasks.add_task(enrich_in_background, alert.dict())
+    background_tasks.add_task(enrich_in_background, alert)
+    return {"status": "accepted", "enrich": bool(SOC_ENRICH)}
 
     return {"accepted": True, "case": case_doc}
 
@@ -514,7 +461,7 @@ def splunk_search(body: SplunkQuery):
         ],
     }
 
-@app.post("/cases/", operation_id="create_case")
+@app.post("/cases/", status_code=status.HTTP_200_OK, operation_id="create_case")
 def create_case(case: CaseCreate):
     return {
         "status": "open",
@@ -524,7 +471,7 @@ def create_case(case: CaseCreate):
     }
 
 
-# CVE Dummy (Tests)
+# --- CVE Dummy (für Tests) ---------------------------------------------------
 @app.get("/cve/{cve_id}", operation_id="cve_lookup")
 def cve_lookup(cve_id: str):
     url = f"https://example.local/cve/{cve_id}"  # wird in Unit-Tests gemockt
@@ -717,15 +664,17 @@ def _parse_kv_query(q: str) -> Dict[str, Any]:
 
 def _filter_rows(rows: List[Dict[str, Any]], kv: Dict[str, str], limit: int) -> List[Dict[str, Any]]:
     def ok(r: Dict[str, Any]) -> bool:
-        for k, v in kv.items():
-            if k not in r or v.lower() not in str(r[k]).lower():
+        low = {str(k).lower(): str(v) for k, v in r.items()}
+        for k, v in (kv or {}).items():
+            lk = str(k).lower()
+            if lk not in low or str(v).lower() not in low[lk].lower():
                 return False
         return True
     out: List[Dict[str, Any]] = []
     for r in rows:
         if ok(r):
             out.append(r)
-            if len(out) >= limit:
+            if len(out) >= max(1, limit):
                 break
     return out
 
@@ -787,6 +736,29 @@ def sentinel_query_route(body: SentinelQueryBody):
     try:
         kql = body.kql or ""
         parsed = _parse_kv_query(kql.replace("|", " "))
+        
+        # Aliase für Felder mit Leerzeichen (damit "action=blocked" etc. klappt)
+        aliases = {
+            "action": "Log subtype",
+            "src": "Src IP",
+            "dst": "Dst IP",
+            "dest_port": "Dst port",
+            "dpt": "Dst port",
+        }
+        kv2 = {}
+        for k, v in (parsed.get("kv") or {}).items():
+            kv2[aliases.get(k.lower(), k)] = v
+        parsed["kv"] = kv2
+
+        import re
+        m = re.search(r'(?is)\bproject\b\s+(.+?)(?:\s+\w+=|$)', body.kql or "")
+        if m:
+            cols_raw = m.group(1).strip()
+            # Spaltenliste robust zerlegen: Kommas, Quotes entfernen, trimmen
+            cols = [c.strip().strip('"').strip("'") for c in cols_raw.split(",")]
+        else:
+            cols = None
+
         ds = parsed.get("dataset")
         if ds and ds in DATASETS_CFG_SENTINEL:
             rows = _load_csv_rows(DATASETS_CFG_SENTINEL[ds])
@@ -812,9 +784,8 @@ def sentinel_query_route(body: SentinelQueryBody):
 # --------------------------------------------------------------------
 mcp.setup_server()
 
-# --------------------------------------------------------------------
-# Main
-# --------------------------------------------------------------------
+
+# --- Main -------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
     host = CFG.get("server", {}).get("host", "127.0.0.1")

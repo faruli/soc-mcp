@@ -70,8 +70,9 @@ _AUDIT_CANDIDATES = [
 AUDIT_FILE = next((p for p in _AUDIT_CANDIDATES if p and p.exists()), _AUDIT_CANDIDATES[1])
 
 # Alerts & Enrich JSONL (werden vom soc_server geschrieben)
-ALERTS_FILE = (LOG_DIR / "_alerts.json").resolve()
-ENRICH_FILE = (LOG_DIR / "_enrich.json").resolve()
+ALERTS_FILE = (LOG_DIR / "alerts.jsonl").resolve()
+ENRICH_FILE = (LOG_DIR / "_enrich.jsonl").resolve()
+
 
 # ------------------------- App --------------------------------------- 
 app = FastAPI(
@@ -105,6 +106,7 @@ async def _http_audit(request, call_next):
 
 # ------------- Dashboard / Static -------------------------
 print(f"[dashboard] dir={DASHBOARD_DIR} index={DASHBOARD_DIR / 'index.html'} exists={(DASHBOARD_DIR / 'index.html').exists()}")
+print(f"[proxy] LOG_DIR={LOG_DIR} ALERTS_FILE={ALERTS_FILE}")
 
 @app.get("/", include_in_schema=False)
 def root_redirect():
